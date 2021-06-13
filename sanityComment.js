@@ -36,48 +36,49 @@ async function getYoutubeData(item) {
 }
 
 async function mutation(item) {
-  console.log(item);
   //Make a query to check if video exists
-  // let check = await client
-  //   .fetch(`*[_type == "comment" && video == "${item.videoId}"]`)
-  //   // .then((data) => console.log(data))
-  //   .catch(console.error);
+  let check = await client
+    .fetch(`*[_type == "comment" && orginalText == "${item.orginalText}"]`)
+    .catch(console.error);
 
-  //   //if doesnt exist then create an entry
-  //   if (!check.length) {
-  const mutations = [
-    {
-      createOrReplace: {
-        _type: "comment",
-        video: item.video,
-        videoId: {
-          _type: "reference",
-          _ref: item.videoId,
+  //if doesnt exist then create an entry
+  if (check.length == 0) {
+    console.log("doesnt exist", check);
+    const mutations = [
+      {
+        create: {
+          _type: "comment",
+          video: item.video,
+          videoId: {
+            _type: "reference",
+            _ref: item.videoId,
+          },
+          orginalText: item.orginalText,
+          text: item.text,
+          timeStamp: item.timeStamp,
+          hashtag: item.hashtag,
+          likes: item.likes,
+          commentAuthor: item.commentAuthor,
+          url: item.url,
+          image: item.image,
         },
-        orginalText: item.orginalText,
-        text: item.text,
-        timeStamp: item.timeStamp,
-        hashtag: item.hashtag,
-        likes: item.likes,
-        commentAuthor: item.commentAuthor,
-        url: item.url,
-        image: item.image,
       },
-    },
-  ];
+    ];
 
-  fetch(`https://${projectId}.api.sanity.io/v1/data/mutate/${datasetName}`, {
-    method: "post",
-    headers: {
-      "Content-type": "application/json",
-      Authorization: `Bearer ${tokenWithWriteAccess}`,
-    },
-    body: JSON.stringify({ mutations }),
-  })
-    .then((response) => response.json())
-    .then((result) => console.log(result))
-    .catch((error) => console.error(error));
-  // }
+    fetch(`https://${projectId}.api.sanity.io/v1/data/mutate/${datasetName}`, {
+      method: "post",
+      headers: {
+        "Content-type": "application/json",
+        Authorization: `Bearer ${tokenWithWriteAccess}`,
+      },
+      body: JSON.stringify({ mutations }),
+    })
+      .then((response) => response.json())
+      .then((result) => console.log(result))
+      .catch((error) => console.error(error));
+  } else {
+    console.log("exists");
+  }
 }
 
 function extractRegex(inputText, regex) {
@@ -85,67 +86,70 @@ function extractRegex(inputText, regex) {
   var match;
 
   while ((match = regex.exec(inputText))) {
-    console.log(match);
+    // console.log(match);
     matches.push(match[0]);
   }
 
   return matches;
 }
 
-async function pushComments(comments) {
+function pushComments(comments) {
   if (comments) {
     comments.forEach((element) => {
       let commentsSplit = element.comment.split("\n");
-      commentsSplit.forEach((singleComment) => {
-        if (singleComment.includes(":")) {
-          let timeStamp = "";
-          let text = "";
-          let url = "";
-          let hashtag = extractRegex(
-            singleComment.trim(),
-            hashTagRegex
-          ).toString();
-          let tStamp = extractRegex(singleComment.trim(), timeRegex).toString();
-          //if (timeReg.test(singleComment)) {
-          let timeStampSplit = tStamp.split(":");
-          if (timeStampSplit.length === 3) {
-            url =
-              "https://www.youtube.com/watch?v=" +
-              element.video +
-              "&t=" +
-              timeStampSplit[0] +
-              "h" +
-              timeStampSplit[1] +
-              "m" +
-              timeStampSplit[2] +
-              "s";
-          } else {
-            url =
-              "https://www.youtube.com/watch?v=" +
-              element.video +
-              "&t=" +
-              timeStampSplit[0] +
-              "m" +
-              timeStampSplit[1] +
-              "s";
+      commentsSplit.forEach((singleComment, i) => {
+        setTimeout(() => {
+          //set timeout to by pass rate limiting
+          if (singleComment.includes(":")) {
+            let timeStamp = "";
+            let text = "";
+            let url = "";
+            let hashtag = extractRegex(
+              singleComment.trim(),
+              hashTagRegex
+            ).toString();
+            let tStamp = extractRegex(
+              singleComment.trim(),
+              timeRegex
+            ).toString();
+            let timeStampSplit = tStamp.split(":");
+            if (timeStampSplit.length === 3) {
+              url =
+                "https://www.youtube.com/watch?v=" +
+                element.video +
+                "&t=" +
+                timeStampSplit[0] +
+                "h" +
+                timeStampSplit[1] +
+                "m" +
+                timeStampSplit[2] +
+                "s";
+            } else {
+              url =
+                "https://www.youtube.com/watch?v=" +
+                element.video +
+                "&t=" +
+                timeStampSplit[0] +
+                "m" +
+                timeStampSplit[1] +
+                "s";
+            }
+
+            let mutationObject = {
+              orginalText: singleComment,
+              video: element.video,
+              videoId: element.videoId,
+              text: singleComment,
+              likes: element.likes,
+              timeStamp: tStamp,
+              commentAuthor: element.commentAuthor,
+              hashtag: hashtag,
+              image: element.image,
+              url: url,
+            };
+            mutation(mutationObject);
           }
-
-          let mutationObject = {
-            orginalText: singleComment,
-            video: element.video,
-            videoId: element.videoId,
-            text: singleComment,
-            likes: element.likes,
-            timeStamp: tStamp,
-            commentAuthor: element.commentAuthor,
-            hashtag: hashtag,
-            image: element.image,
-            url: url,
-          };
-
-          mutation(mutationObject);
-          //}
-        }
+        }, i * 6000);
       });
     });
   }
@@ -153,9 +157,6 @@ async function pushComments(comments) {
 
 async function runSscript() {
   let comments = [];
-  let commentCheck = await client
-    .fetch(`*[_type == "comment"]`)
-    .catch(console.error);
   let check = await client.fetch(`*[_type == "video"]`).catch(console.error);
 
   let citiesForecasts = [];
