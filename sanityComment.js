@@ -61,6 +61,7 @@ async function mutation(item) {
           commentAuthor: item.commentAuthor,
           url: item.url,
           image: item.image,
+          upvote: 0,
         },
       },
     ];
@@ -91,6 +92,19 @@ function extractRegex(inputText, regex) {
   }
 
   return matches;
+}
+
+function getTitleOnly(str, arr) {
+  let regex = new RegExp("\\b" + arr.join("|") + "\\b", "gi");
+  return str.replace(regex, "");
+}
+
+function cleanText(inputText) {
+  let time = extractRegex(inputText, timeRegex);
+  let hashtag = extractRegex(inputText, hashTagRegex);
+  let title = getTitleOnly(inputText, [time, hashtag]);
+
+  return title.toString().trim();
 }
 
 function pushComments(comments) {
@@ -139,7 +153,7 @@ function pushComments(comments) {
               orginalText: singleComment,
               video: element.video,
               videoId: element.videoId,
-              text: singleComment,
+              text: cleanText(singleComment),
               likes: element.likes,
               timeStamp: tStamp,
               commentAuthor: element.commentAuthor,
