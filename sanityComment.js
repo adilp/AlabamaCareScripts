@@ -42,7 +42,7 @@ async function mutation(item) {
     .catch(console.error);
 
   //if doesnt exist then create an entry
-  if (check.length == 0) {
+  if (!check || check.length === 0) {
     console.log("doesnt exist", check);
     const mutations = [
       {
@@ -78,7 +78,7 @@ async function mutation(item) {
       .then((result) => console.log(result))
       .catch((error) => console.error(error));
   } else {
-    console.log("exists");
+    // console.log("exists");
   }
 }
 
@@ -150,10 +150,10 @@ function pushComments(comments) {
             }
 
             let mutationObject = {
-              orginalText: singleComment,
+              orginalText: singleComment.replace(/['"]+/g, ""),
               video: element.video,
               videoId: element.videoId,
-              text: cleanText(singleComment),
+              text: cleanText(singleComment.replace(/['"]+/g, "")),
               likes: element.likes,
               timeStamp: tStamp,
               commentAuthor: element.commentAuthor,
