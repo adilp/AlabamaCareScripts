@@ -90,14 +90,15 @@ async function deleteDocument(type) {
 }
 
 async function runSscript() {
-  let youtubeData = await getYoutubeData();
+  // let youtubeData = await getYoutubeData();
 
-  //using map instead of for each because foreach doesnt work well with promises
-  youtubeData.data.items.map((item) => {
-    console.log(item.snippet.thumbnails);
-    mutation(item);
-  });
-  // await deleteDocument("comment");
+  // //using map instead of for each because foreach doesnt work well with promises
+  // youtubeData.data.items.map((item) => {
+  //   console.log(item.snippet.thumbnails);
+  //   mutation(item);
+  // });
+  await deleteDocument("comment");
+  //await deleteDocument("category");
 }
 
 if (module === require.main) {

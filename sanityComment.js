@@ -26,6 +26,8 @@ const tokenWithWriteAccess =
 const timeRegex = /(?<!\S)(?:(?:(\d{1,2}):)?([0-5]?\d):)?([0-5]?\d)(?!\S)/gm;
 const hashTagRegex = /(?:^|\s)(?:#)([a-zA-Z\d]+)/gm;
 
+let categories = [];
+
 async function getYoutubeData(item) {
   return await youtube.commentThreads.list({
     part: "id,snippet",
@@ -35,50 +37,133 @@ async function getYoutubeData(item) {
   });
 }
 
-async function mutation(item) {
-  //Make a query to check if video exists
-  let check = await client
-    .fetch(`*[_type == "comment" && orginalText == "${item.orginalText}"]`)
-    .catch(console.error);
-
-  //if doesnt exist then create an entry
-  if (!check || check.length === 0) {
-    console.log("doesnt exist", check);
-    const mutations = [
+async function hashtagCategory(hashtag) {
+  console.log("41", hashtag);
+  if (hashtag === "") {
+    console.log("EMPTYYYY");
+    return null;
+  }
+  //converting from object to array
+  const filtered = categories.reduce(
+    (a, o) => (o.hashtag === hashtag.trim() && a.push(o._id), a),
+    []
+  );
+  console.log("filtered: ", filtered);
+  if (!filtered.length) {
+    console.log("53 doesnt exist");
+    let mutations = [
       {
         create: {
-          _type: "comment",
-          video: item.video,
-          videoId: {
-            _type: "reference",
-            _ref: item.videoId,
-          },
-          orginalText: item.orginalText,
-          text: item.text,
-          timeStamp: item.timeStamp,
-          hashtag: item.hashtag,
-          likes: item.likes,
-          commentAuthor: item.commentAuthor,
-          url: item.url,
-          image: item.image,
-          upvote: 0,
+          _type: "category",
+          hashtag: hashtag.trim(),
         },
       },
     ];
 
-    fetch(`https://${projectId}.api.sanity.io/v1/data/mutate/${datasetName}`, {
-      method: "post",
-      headers: {
-        "Content-type": "application/json",
-        Authorization: `Bearer ${tokenWithWriteAccess}`,
-      },
-      body: JSON.stringify({ mutations }),
-    })
+    // const response = await fetch("/movies");
+    // const movies = await response.json();
+    // return movies;
+
+    let response = await fetch(
+      `https://${projectId}.apicdn.sanity.io/v1/data/mutate/${datasetName}`,
+      {
+        method: "post",
+        headers: {
+          "Content-type": "application/json",
+          Authorization: `Bearer ${tokenWithWriteAccess}`,
+        },
+        body: JSON.stringify({ mutations }),
+      }
+    );
+    const res = await response.json();
+    // console.log("****************", res.transactionId);
+    return res.transactionId;
+  } else {
+    // console.log("exists and filtered", filtered, filtered[0]);
+    return filtered[0];
+  }
+}
+
+async function mutation(item) {
+  let mutations = [];
+  //Make a query to check if video exists
+  let check = await client
+    .fetch(`*[_type == "comment" && orginalText == "${item.orginalText}"]`)
+    .catch(console.error);
+  // console.log("this is after cat", check);
+  // console.log(!check || check.length === 0);
+  //if doesnt exist then create an entry
+  if (!check || check.length === 0) {
+    console.log("this is after cat");
+    let catHash = await hashtagCategory(item.hashtag).catch(console.error);
+    console.log("cathas: ", catHash);
+    if (catHash) {
+      console.log("exist comment!!!!", check);
+      mutations = [
+        {
+          create: {
+            _type: "comment",
+            video: item.video,
+            videoId: {
+              _type: "reference",
+              _ref: item.videoId,
+            },
+            orginalText: item.orginalText,
+            text: item.text,
+            timeStamp: item.timeStamp,
+            hashtag: item.hashtag,
+            likes: item.likes,
+            commentAuthor: item.commentAuthor,
+            url: item.url,
+            image: item.image,
+            upvote: 0,
+            categories: {
+              _type: "reference",
+              _ref: catHash,
+            },
+          },
+        },
+      ];
+    } else {
+      mutations = [
+        {
+          create: {
+            _type: "comment",
+            video: item.video,
+            videoId: {
+              _type: "reference",
+              _ref: item.videoId,
+            },
+            orginalText: item.orginalText,
+            text: item.text,
+            timeStamp: item.timeStamp,
+            hashtag: item.hashtag,
+            likes: item.likes,
+            commentAuthor: item.commentAuthor,
+            url: item.url,
+            image: item.image,
+            upvote: 0,
+          },
+        },
+      ];
+    }
+
+    fetch(
+      `https://${projectId}.apicdn.sanity.io/v1/data/mutate/${datasetName}`,
+      {
+        method: "post",
+        headers: {
+          "Content-type": "application/json",
+          Authorization: `Bearer ${tokenWithWriteAccess}`,
+        },
+        body: JSON.stringify({ mutations }),
+      }
+    )
       .then((response) => response.json())
-      .then((result) => console.log(result))
+      .then((result) => console.log("print", result, mutations))
       .catch((error) => console.error(error));
   } else {
-    // console.log("exists");
+    console.log("exists");
   }
 }
 
@@ -173,10 +258,15 @@ async function runSscript() {
   let comments = [];
   let check = await client.fetch(`*[_type == "video"]`).catch(console.error);
 
-  let citiesForecasts = [];
-  check.map((city) => citiesForecasts.push(getYoutubeData(city.video)));
+  categories = await client
+    .fetch(`*[_type == "category"]`)
+    .catch(console.error);
+  // let numRay = categories.forEach((v) => console.log(v.hashtag));
 
-  Promise.all(citiesForecasts)
+  let videoData = [];
+  check.map((city) => videoData.push(getYoutubeData(city.video)));
+
+  Promise.all(videoData)
     .then((results) => {
       results.map((test) => {
         if (test.data.items) {
